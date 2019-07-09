@@ -7,7 +7,6 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.web.servlet.ServletComponentScan;
 
 @SpringBootApplication
-@ServletComponentScan
 public class AppApplication {
 
 	public static void main(String[] args) {
