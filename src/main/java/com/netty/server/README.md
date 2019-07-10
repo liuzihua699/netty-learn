@@ -109,3 +109,58 @@ public class DiscardServer {
 
 
 
+##  查看收到的数据
+现在我们已经编写出我们第一个服务端，我们需要测试一下他是否真的可以运行。最简单的测试方法是用 telnet 命令。例如，你可以在命令行上输入telnet localhost 8080或者其他类型参数。
+
+然而我们能说这个服务端是正常运行了吗？事实上我们也不知道，因为他是一个 discard 服务，你根本不可能得到任何的响应。为了证明他仍然是在正常工作的，让我们修改服务端的程序来打印出他到底接收到了什么。
+
+我们已经知道 channelRead() 方法是在数据被接收的时候调用。让我们放一些代码到 DiscardServerHandler 类的 channelRead() 方法。
+
+```java
+@Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+        ByteBuf in = (ByteBuf) msg;
+        try {
+            while (in.isReadable()) {
+                System.out.println(in.readByte());
+                System.out.flush();
+            }
+        } finally {
+            ReferenceCountUtil.release(msg);
+        }
+    }
+```
+
+1.这个低效的循环事实上可以简化为:System.out.println(in.toString(io.netty.util.CharsetUtil.US_ASCII))
+
+2.或者，你可以在这里调用 in.release()。
+
+如果你再次运行 telnet 命令，你将会看到服务端打印出了他所接收到的消息。
+
+
+
+# Netty 4.x 写个应答服务器
+
+到目前为止，我们虽然接收到了数据，但没有做任何的响应。然而一个服务端通常会对一个请求作出响应。让我们学习怎样在 ECHO 协议的实现下编写一个响应消息给客户端，这个协议针对任何接收的数据都会返回一个响应。
+
+和 discard server 唯一不同的是把在此之前我们实现的 channelRead() 方法，返回所有的数据替代打印接收数据到控制台上的逻辑。因此，需要把 channelRead() 方法修改如下
+
+```java
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
+        ctx.write(msg); // (1)
+        ctx.flush(); // (2)
+    }
+```
+
+1. ChannelHandlerContext 对象提供了许多操作，使你能够触发各种各样的 I/O 事件和操作。这里我们调用了 write(Object) 方法来逐字地把接受到的消息写入。请注意不同于 DISCARD 的例子我们并没有释放接受到的消息，这是因为当写入的时候 Netty 已经帮我们释放了。
+2. ctx.write(Object) 方法不会使消息写入到通道上，他被缓冲在了内部，你需要调用 ctx.flush() 方法来把缓冲区中数据强行输出。或者你可以用更简洁的 cxt.writeAndFlush(msg) 以达到同样的目的。
+如果你再一次运行 telnet 命令，你会看到服务端会发回一个你已经发送的消息。
+
+
+
+
+
+
+
