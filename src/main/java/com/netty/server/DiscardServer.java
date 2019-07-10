@@ -13,11 +13,13 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 import lombok.Value;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
+import org.springframework.stereotype.Component;
 
 /**
  * @ClassName DiscardServer
- * @Description TODO
+ * @Description TODO    写个Discard(丢弃)服务器
  * @Author 刘子华
  * @Date 2019/7/9 22:34
  */
@@ -68,8 +70,7 @@ public class DiscardServer {
 
     public static void main(String[] args) throws Exception {
 
-        new DiscardServer(8283).run();
+        new DiscardServer().run();
+        //访问 http://localhost:8888 然后回到控制台能看到访问信息
     }
-
-
 }
