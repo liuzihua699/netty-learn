@@ -2,6 +2,7 @@ package com.netty.client;
 
 import com.netty.client.decoder.TimeDecoder;
 import com.netty.client.handler.TimeClientHandler;
+import com.netty.client.handler.TimeClientHandlerTest;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -50,6 +51,17 @@ public class TimeClientTest {
                             socketChannel.pipeline().addLast(new TimeClientHandler()).addLast(new TimeDecoder());
                         }
                     });
+            //或者
+            /*boot.group(workerGroup)
+                    .channel(NioSocketChannel.class)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .handler(new ChannelInitializer<SocketChannel>() {
+
+                        @Override
+                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+                            socketChannel.pipeline().addLast(new TimeClientHandlerTest());
+                        }
+                    });*/
 
             //启动客户端
             ChannelFuture future = boot.connect("127.0.0.1", getPort()).sync();
