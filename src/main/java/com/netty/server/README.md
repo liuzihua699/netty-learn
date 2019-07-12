@@ -159,8 +159,141 @@ public class DiscardServer {
 如果你再一次运行 telnet 命令，你会看到服务端会发回一个你已经发送的消息。
 
 
+# Netty 4.x 写个时间服务器
+在这个部分被实现的协议是 TIME 协议。和之前的例子不同的是在不接受任何请求时他会发送一个含32位的整数的消息，并且一旦消息发送就会立即关闭连接。在这个例子中，你会学习到如何构建和发送一个消息，然后在完成时关闭连接。
+
+因为我们将会忽略任何接收到的数据，而只是在连接被创建发送一个消息，所以这次我们不能使用 channelRead() 方法了，代替他的是，我们需要覆盖 channelActive() 方法，下面的就是实现的内容：
 
 
+```java
+public class TimeServerHandler extends ChannelInboundHandlerAdapter {
 
+    @Override
+    public void channelActive(final ChannelHandlerContext ctx) {
+        final ByteBuf time = ctx.alloc().buffer(4);
+        time.writeInt((int) (System.currentTimeMillis() / 1000L + 2208988800L));
+
+        final ChannelFuture future = ctx.writeAndFlush(time);
+        future.addListener(new ChannelFutureListener() {
+            @Override
+            public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                assert future == channelFuture;
+                ctx.close();
+            }
+        });
+
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+}
+```
+TimeServer部分和之前的一样。
+1. channelActive() 方法将会在连接被建立并且准备进行通信时被调用。因此让我们在这个方法里完成一个代表当前时间的32位整数消息的构建工作。
+
+2. 为了发送一个新的消息，我们需要分配一个包含这个消息的新的缓冲。因为我们需要写入一个32位的整数，因此我们需要一个至少有4个字节的 ByteBuf。通过 ChannelHandlerContext.alloc() 得到一个当前的ByteBufAllocator，然后分配一个新的缓冲。
+
+3. 和往常一样我们需要编写一个构建好的消息。但是等一等，flip 在哪？难道我们使用 NIO 发送消息时不是调用 java.nio.ByteBuffer.flip() 吗？ByteBuf 之所以没有这个方法因为有两个指针，一个对应读操作一个对应写操作。当你向 ByteBuf 里写入数据的时候写指针的索引就会增加，同时读指针的索引没有变化。读指针索引和写指针索引分别代表了消息的开始和结束。
+
+
+比较起来，NIO 缓冲并没有提供一种简洁的方式来计算出消息内容的开始和结尾，除非你调用 flip 方法。当你忘记调用 flip 方法而引起没有数据或者错误数据被发送时，你会陷入困境。这样的一个错误不会发生在 Netty 上，因为我们对于不同的操作类型有不同的指针。你会发现这样的使用方法会让你过程变得更加的容易，因为你已经习惯一种没有使用 flip 的方式。
+
+
+另外一个点需要注意的是 ChannelHandlerContext.write() (和 writeAndFlush() )方法会返回一个 ChannelFuture 对象，一个 ChannelFuture 代表了一个还没有发生的 I/O 操作。这意味着任何一个请求操作都不会马上被执行，因为在 Netty 里所有的操作都是异步的。举个例子下面的代码中在消息被发送之前可能会先关闭连接。
+
+
+# Netty 4.x 写个时间客户端
+TIME客户端可以主动连接服务端，服务端会发送一条服务端本地的时间，客户端接收后会解码打印至控制台。
+
+
+Handler实现：
+```java
+public class TimeClientHandler extends ChannelInboundHandlerAdapter {
+
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        ByteBuf buf = (ByteBuf) msg;
+        try {
+            long time =  (buf.readUnsignedInt() - 2208988800L) * 1000L;
+            System.out.println(new Date(time));
+            ctx.close();
+        } finally {
+            buf.release();
+        }
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+        cause.printStackTrace();
+        ctx.close();
+    }
+}
+```
+
+Client实现：
+
+```java
+public class TimeClient {
+
+    @Getter@Setter
+    private int port;
+
+    public TimeClient(int port) {
+        this.port = port;
+    }
+
+    public TimeClient() {
+        this.port = 8888;
+    }
+
+
+    public void run() throws Exception {
+
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+        try {
+            Bootstrap boot = new Bootstrap();
+            boot.group(workerGroup)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    .channel(NioSocketChannel.class)
+                    .handler(new ChannelInitializer<SocketChannel>() {
+                        @Override
+                        protected void initChannel(SocketChannel socketChannel) throws Exception {
+                            socketChannel.pipeline().addLast(new TimeClientHandler());
+                        }
+                    });
+
+            //启动客户端
+            ChannelFuture future = boot.connect("127.0.0.1", getPort()).sync();
+            //等待连接关闭
+            future.channel().closeFuture().sync();
+
+        } finally {
+            workerGroup.shutdownGracefully();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+
+        new TimeClient().run();
+        //先运行TimeServer.run()然后 运行TimeClient.run() 即可看到由服务端发送过来的消息。
+    }
+}
+```
+
+1. BootStrap 和 ServerBootstrap 类似,不过他是对非服务端的 channel 而言，比如客户端或者无连接传输模式的 channel。
+
+2. 如果你只指定了一个 EventLoopGroup，那他就会即作为一个 boss group ，也会作为一个 workder group，尽管客户端不需要使用到 boss worker 。
+
+3. 代替NioServerSocketChannel的是NioSocketChannel,这个类在客户端channel 被创建时使用。
+
+4. 不像在使用 ServerBootstrap 时需要用 childOption() 方法，因为客户端的 SocketChannel 没有父亲。
+
+5. 我们用 connect() 方法代替了 bind() 方法。
+
+正如你看到的，他和服务端的代码是不一样的。ChannelHandler 是如何实现的?他应该从服务端接受一个32位的整数消息，把他翻译成人们能读懂的格式，并打印翻译好的时间，最后关闭连接:
 
 
