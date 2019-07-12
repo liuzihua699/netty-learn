@@ -15,7 +15,7 @@ import lombok.Setter;
 
 /**
  * @ClassName DiscardServer
- * @Description TODO    查看收到的数据
+ * @Description TODO    Diescard服务器更正版
  * @Author 刘子华
  * @Date 2019/7/9 22:34
  */

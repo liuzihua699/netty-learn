@@ -15,7 +15,7 @@ import lombok.Setter;
 
 /**
  * @ClassName DiscardServer
- * @Description TODO    应答服务器
+ * @Description TODO    ECHO协议服务器
  * @Author 刘子华
  * @Date 2019/7/9 22:34
  */

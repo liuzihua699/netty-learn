@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * @ClassName DiscardServer
- * @Description TODO    写个Discard(丢弃)服务器
+ * @Description TODO    Discard协议服务器
  * @Author 刘子华
  * @Date 2019/7/9 22:34
  */
