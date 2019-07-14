@@ -402,6 +402,164 @@ public class TimeDecoder extends ByteToMessageDecoder {
 现在我们有另外一个处理器插入到 ChannelPipeline 里，我们应该在 TimeClient 里修改 ChannelInitializer 的实现：
 
 
+```java
+
+boot.handler(new ChannelInitializer<SocketChannel>(){
+    @Override
+    protected void initChannel(SocketChannel socketChannel) throws Exception {
+        socketChannel.pipeline().addLast(new TimeClientHandler()).addLast(new TimeDecoder());
+    }
+});
+```
+
+# Netty 4.x 用POJO代替ByteBuf
+
+用POJO代替ByteBuf
+我们回顾了迄今为止的所有例子使用 ByteBuf 作为协议消息的主要数据结构。在本节中,我们将改善的 TIME 协议客户端和服务器例子，使用 POJO 代替 ByteBuf。
+
+在 ChannelHandler 使用 POIO 的好处很明显：通过从ChannelHandler 中提取出 ByteBuf 的代码，将会使 ChannelHandler的实现变得更加可维护和可重用。在 TIME 客户端和服务器的例子中，我们读取的仅仅是一个32位的整形数据，直接使用 ByteBuf 不会是一个主要的问题。然而，你会发现当你需要实现一个真实的协议，分离代码变得非常的必要。
+
+首先，让我们定义一个新的类型叫做 UnixTime。
+
+```java
+public class UnixTime {
+
+    @Getter
+    private final long value;
+
+    public UnixTime() {
+        this(System.currentTimeMillis() / 1000L + 2208988800L);
+    }
+
+    public UnixTime(long value) {
+        this.value = value;
+    }
+
+
+    @Override
+    public String toString() {
+        return "UnixTime{" +
+                "value=" + new Date((getValue() - 2208988800L) * 1000L).toString() +
+                '}';
+    }
+}
+```
+
+现在我们可以修改下 TimeDecoder 类，返回一个 UnixTime，以替代ByteBuf
+
+```java
+public class TimeDecoder extends ByteToMessageDecoder {
+
+    @Override
+    protected void decode(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf, List<Object> list) throws Exception {
+        if (byteBuf.readableBytes() < 4) {
+            return;
+        }
+        list.add(byteBuf.readBytes(4));
+    }
+}
+```
+
+下面是修改后的解码器，TimeClientHandler 不再任何的 ByteBuf 代码了。
+
+```java
+    @Override
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        UnixTime m = (UnixTime) msg;
+        System.out.println(m);
+        ctx.close();
+    }
+```
+
+是不是变得更加简单和优雅了？相同的技术可以被运用到服务端。让我们修改一下 TimeServerHandler 的代码。
+
+```java
+    @Override
+    public void channelActive(final ChannelHandlerContext ctx) {
+
+        ChannelFuture future = ctx.writeAndFlush(new UnixTime());
+        future.addListener(ChannelFutureListener.CLOSE);
+    }
+```
+
+现在,唯一缺少的功能是一个编码器,是ChannelOutboundHandler的实现，用来将 UnixTime 对象重新转化为一个 ByteBuf。这是比编写一个解码器简单得多,因为没有需要处理的数据包编码消息时拆分和组装。
+
+```java
+public class TimeEncoder extends ChannelOutboundHandlerAdapter {
+
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        UnixTime m = (UnixTime) msg;
+        ByteBuf encoded = ctx.alloc().buffer(4);
+        encoded.writeInt((int) m.getValue());
+        ctx.write(encoded, promise);
+    }
+}
+```
+
+1.在这几行代码里还有几个重要的事情。第一，通过 ChannelPromise，当编码后的数据被写到了通道上 Netty 可以通过这个对象标记是成功还是失败。第二， 我们不需要调用 cxt.flush()。因为处理器已经单独分离出了一个方法 void flush(ChannelHandlerContext cxt),如果像自己实现 flush() 方法内容可以自行覆盖这个方法。
+
+进一步简化操作，你可以使用 MessageToByteEncode:
+```java
+    public class TimeEncoder extends MessageToByteEncoder<UnixTime> {
+        @Override
+        protected void encode(ChannelHandlerContext ctx, UnixTime msg, ByteBuf out) {
+            out.writeInt((int)msg.value());
+        }
+    }
+```
+
+最后的任务就是在 TimeServerHandler 之前把 TimeEncoder 插入到ChannelPipeline。 但这是不那么重要的工作。
+
+
+# Netty 4.x 关闭你的应用
+关闭一个 Netty 应用往往只需要简单地通过 shutdownGracefully() 方法来关闭你构建的所有的 EventLoopGroup。当EventLoopGroup 被完全地终止,并且对应的所有 channel 都已经被关闭时，Netty 会返回一个Future对象来通知你。
+
+
+
+
+# Netty 4.x Netty 实现聊天功能
+
+Netty 是一个 Java NIO 客户端服务器框架，使用它可以快速简单地开发网络应用程序，比如服务器和客户端的协议。Netty 大大简化了网络程序的开发过程比如 TCP 和 UDP 的 socket 服务的开发。更多关于 Netty 的知识，可以参阅《Netty 4.x 用户指南》https://github.com/waylau/netty-4-user-guide
+
+下面，就基于 Netty 快速实现一个聊天小程序。
+
+
+- 准备
+- JDK 7+
+- Maven 3.2.x
+- Netty 4.x
+- Eclipse 4.x
+
+
+## 服务端
+让我们从 handler （处理器）的实现开始，handler 是由 Netty 生成用来处理 I/O 事件的。
+
+
+项目代码见com.im目录下，可以运行SimpleChatServer.main()和SimpleChatClient.main()来查看效果。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
