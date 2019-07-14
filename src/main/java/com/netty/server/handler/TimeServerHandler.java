@@ -1,5 +1,6 @@
 package com.netty.server.handler;
 
+import com.netty.pojo.UnixTime;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -17,18 +18,9 @@ public class TimeServerHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelActive(final ChannelHandlerContext ctx) {
-        final ByteBuf time = ctx.alloc().buffer(4);
-        time.writeInt((int) (System.currentTimeMillis() / 1000L + 2208988800L));
 
-        final ChannelFuture future = ctx.writeAndFlush(time);
-        future.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                assert future == channelFuture;
-                ctx.close();
-            }
-        });
-
+        ChannelFuture future = ctx.writeAndFlush(new UnixTime());
+        future.addListener(ChannelFutureListener.CLOSE);
     }
 
     @Override
