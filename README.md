@@ -542,7 +542,41 @@ Netty 是一个 Java NIO 客户端服务器框架，使用它可以快速简单�
 
 
 
+# Netty 实现 WebSocket 聊天功能
+上一次我们用Netty快速实现了一个 Java 聊天程序。现在，我们要做下修改，加入 WebSocket 的支持，使它可以在浏览器里进行文本聊天。
 
+准备
+- JDK 7+
+- Maven 3.2.x
+- Netty 4.x
+- Eclipse 4.x
+
+## WebSocket
+WebSocket 通过“Upgrade handshake（升级握手）”从标准的 HTTP 或HTTPS 协议转为 WebSocket。因此，使用 WebSocket 的应用程序将始终以 HTTP/S 开始，然后进行升级。在什么时候发生这种情况取决于具体的应用;它可以是在启动时，或当一个特定的 URL 被请求时。
+
+在我们的应用中，当 URL 请求以“/ws”结束时，我们才升级协议为WebSocket。否则，服务器将使用基本的 HTTP/S。一旦升级连接将使用的WebSocket 传输所有数据。
+
+整个服务器逻辑如下：
+
+![ws](https://liuzihua.top/upload/2019/7/ws-0990e514d401433c95cd190e2f93019b.jpg)
+
+
+1. 客户端/用户连接到服务器并加入聊天
+2. HTTP 请求页面或 WebSocket 升级握手
+3. 服务器处理所有客户端/用户
+4. 响应 URI “/”的请求，转到默认 html 页面
+5. 如果访问的是 URI“/ws” ，处理 WebSocket 升级握手
+6. 升级握手完成后 ，通过 WebSocket 发送聊天消息
+
+
+
+## 服务端
+让我们从处理 HTTP 请求的实现开始。
+
+
+
+
+## 处理 HTTP 请求
 
 
 
